@@ -1,0 +1,8 @@
+services:
+  pfrmp-assistant:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data.json:/app/data.json
+    restart: unless-stopped
