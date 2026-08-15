@@ -8,7 +8,10 @@ export default function AppShell({ children }) {
   if (!hydrated) {
     return (
       <main className="container">
-        <p className="sub">Loading PFRMP Assistant…</p>
+        <div className="app-loading-state">
+          <div className="app-loading-mark" aria-hidden="true" />
+          <p className="sub">Loading PFRMP Assistant…</p>
+        </div>
       </main>
     );
   }

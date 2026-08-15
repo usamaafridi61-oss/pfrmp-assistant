@@ -1,3 +1,5 @@
+import { ensureModuleDefaults } from "@/lib/modules/seed";
+
 export const DEFAULT_DATA = {
   divisions: [],
   planningUnits: [],
@@ -8,13 +10,23 @@ export const DEFAULT_DATA = {
   docs: [],
   technicalGuidance: [],
   interventionImplementationGuidance: [],
+  ntfpValueChains: [],
+  ntfpActionPlanVersions: [],
+  ntfpActionItems: [],
+  ntfpProgressRecords: [],
+  ntfpEvidence: [],
+  capacityPlanItems: [],
+  capacityEvents: [],
+  spatialLayers: [],
+  vegetationAnalyses: [],
+  moduleDocuments: [],
 };
 
 export function normalizeData(raw) {
   if (!raw || typeof raw !== "object") {
-    return { ...DEFAULT_DATA };
+    return ensureModuleDefaults({ ...DEFAULT_DATA });
   }
-  return {
+  const base = {
     divisions: Array.isArray(raw.divisions) ? raw.divisions : [],
     planningUnits: Array.isArray(raw.planningUnits) ? raw.planningUnits : [],
     interventionsMaster: Array.isArray(raw.interventionsMaster) ? raw.interventionsMaster : [],
@@ -26,7 +38,19 @@ export function normalizeData(raw) {
     interventionImplementationGuidance: Array.isArray(raw.interventionImplementationGuidance)
       ? raw.interventionImplementationGuidance
       : [],
+    ntfpValueChains: Array.isArray(raw.ntfpValueChains) ? raw.ntfpValueChains : [],
+    ntfpActionPlanVersions: Array.isArray(raw.ntfpActionPlanVersions) ? raw.ntfpActionPlanVersions : [],
+    ntfpActionItems: Array.isArray(raw.ntfpActionItems) ? raw.ntfpActionItems : [],
+    ntfpProgressRecords: Array.isArray(raw.ntfpProgressRecords) ? raw.ntfpProgressRecords : [],
+    ntfpEvidence: Array.isArray(raw.ntfpEvidence) ? raw.ntfpEvidence : [],
+    capacityPlanItems: Array.isArray(raw.capacityPlanItems) ? raw.capacityPlanItems : [],
+    capacityEvents: Array.isArray(raw.capacityEvents) ? raw.capacityEvents : [],
+    spatialLayers: Array.isArray(raw.spatialLayers) ? raw.spatialLayers : [],
+    vegetationAnalyses: Array.isArray(raw.vegetationAnalyses) ? raw.vegetationAnalyses : [],
+    moduleDocuments: Array.isArray(raw.moduleDocuments) ? raw.moduleDocuments : [],
   };
+
+  return ensureModuleDefaults(base);
 }
 
 export async function loadData() {
@@ -39,7 +63,7 @@ export async function loadData() {
     return normalizeData(data);
   } catch (e) {
     console.error("loadData error:", e);
-    return DEFAULT_DATA;
+    return ensureModuleDefaults({ ...DEFAULT_DATA });
   }
 }
 

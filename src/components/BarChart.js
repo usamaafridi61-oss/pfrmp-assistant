@@ -3,31 +3,56 @@ export default function BarChart({ data }) {
   const max = Math.max(target, achieved, remaining, 1);
 
   const bars = [
-    { label: "Target", value: target, color: "var(--primary)" },
-    { label: "Achieved", value: achieved, color: "var(--ok)" },
-    { label: "Remaining", value: remaining, color: "#f59e0b" },
+    { label: "Target", value: target, color: "#1e3a29", bg: "#e8efe9", pct: 100 },
+    {
+      label: "Achieved",
+      value: achieved,
+      color: "#16a34a",
+      bg: "#dcfce7",
+      pct: target > 0 ? Math.min(100, Math.round((achieved / target) * 100)) : 0,
+    },
+    {
+      label: "Remaining",
+      value: remaining,
+      color: "#d97706",
+      bg: "#fef3c7",
+      pct: target > 0 ? Math.min(100, Math.round((remaining / target) * 100)) : 0,
+    },
   ];
 
   return (
-    <div className="bar-chart">
+    <div className="clean-bar-chart">
       <div className="bar-chart-bars">
-        {bars.map((bar) => (
-          <div key={bar.label} className="bar-chart-row">
-            <span className="bar-chart-label">{bar.label}</span>
-            <div className="bar-chart-track">
-              <div
-                className="bar-chart-fill"
-                style={{
-                  width: `${(bar.value / max) * 100}%`,
-                  background: bar.color,
-                }}
-              />
+        {bars.map((bar) => {
+          const widthPct = Math.max(0, Math.min(100, (bar.value / max) * 100));
+          return (
+            <div key={bar.label} className="clean-bar-row">
+              <div className="clean-bar-header">
+                <span className="clean-bar-label">{bar.label}</span>
+                <div className="clean-bar-values">
+                  <strong>{bar.value.toLocaleString()}</strong>
+                  <span className="clean-bar-pct-badge" style={{ color: bar.color, background: bar.bg }}>
+                    {bar.pct}%
+                  </span>
+                </div>
+              </div>
+              <div className="clean-bar-track">
+                <div
+                  className="clean-bar-fill"
+                  style={{
+                    width: `${widthPct}%`,
+                    background: bar.color,
+                  }}
+                />
+              </div>
             </div>
-            <span className="bar-chart-value">{bar.value.toLocaleString()}</span>
-          </div>
-        ))}
+          );
+        })}
       </div>
-      <p className="small">Overall progress: {Math.round(progress)}%</p>
+      <div className="clean-bar-footer">
+        <span className="muted small">Overall Cumulative Progress:</span>
+        <strong className="ok">{Math.round(progress)}% of Total Program Target</strong>
+      </div>
     </div>
   );
 }
