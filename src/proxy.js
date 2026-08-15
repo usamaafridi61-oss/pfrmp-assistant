@@ -3,10 +3,11 @@ import {
   AUTH_COOKIE,
   PUBLIC_API_PREFIXES,
   PUBLIC_PATHS,
+  SESSION_IDLE_MS,
 } from "@/lib/auth/constants";
-import { verifySignedValue } from "@/lib/auth/crypto";
+import { ENV_ADMIN_ID, envAdminConfigured } from "@/lib/auth/envAdmin";
+import { decodeSessionToken } from "@/lib/auth/session";
 import { pruneExpired, readAuthStore } from "@/lib/auth/store";
-import { SESSION_IDLE_MS } from "@/lib/auth/constants";
 
 function isPublicPath(pathname) {
   if (PUBLIC_PATHS.includes(pathname)) return true;
@@ -14,21 +15,43 @@ function isPublicPath(pathname) {
 }
 
 async function hasUsers() {
-  const store = pruneExpired(await readAuthStore());
-  return store.users.length > 0;
+  if (envAdminConfigured()) return true;
+  try {
+    const store = pruneExpired(await readAuthStore());
+    return store.users.length > 0;
+  } catch {
+    return false;
+  }
 }
 
 async function sessionIsValid(token) {
-  const sessionId = await verifySignedValue(token);
-  if (!sessionId) return false;
-  const store = pruneExpired(await readAuthStore());
-  const session = store.sessions.find((s) => s.id === sessionId && !s.revokedAt);
-  if (!session) return false;
+  const data = await decodeSessionToken(token);
+  if (!data) return false;
   const now = Date.now();
-  if (new Date(session.expiresAt).getTime() <= now) return false;
-  if (now - new Date(session.lastSeenAt).getTime() > SESSION_IDLE_MS) return false;
-  const user = store.users.find((u) => u.id === session.userId);
-  return Boolean(user && !user.disabled);
+
+  if (!data.legacy) {
+    if (data.exp <= now) return false;
+    if (now - Number(data.seen || data.exp) > SESSION_IDLE_MS) return false;
+    if (data.uid === ENV_ADMIN_ID && envAdminConfigured()) return true;
+  }
+
+  try {
+    const store = pruneExpired(await readAuthStore());
+    if (data.legacy) {
+      const session = store.sessions.find((s) => s.id === data.sid && !s.revokedAt);
+      if (!session) return false;
+      if (new Date(session.expiresAt).getTime() <= now) return false;
+      if (now - new Date(session.lastSeenAt).getTime() > SESSION_IDLE_MS) return false;
+      const user = store.users.find((u) => u.id === session.userId);
+      return Boolean(user && !user.disabled);
+    }
+    const stored = store.sessions.find((s) => s.id === data.sid);
+    if (stored?.revokedAt) return false;
+    const user = store.users.find((u) => u.id === data.uid);
+    return Boolean(user && !user.disabled);
+  } catch {
+    return false;
+  }
 }
 
 function withSecurityHeaders(response) {

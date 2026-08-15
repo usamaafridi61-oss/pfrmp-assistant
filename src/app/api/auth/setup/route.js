@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { ROLES } from "@/lib/auth/constants";
 import { hashPassword } from "@/lib/auth/crypto";
+import { envAdminConfigured } from "@/lib/auth/envAdmin";
 import { publicUser, validateDisplayName, validatePassword, validateUsername } from "@/lib/auth/password";
 import {
   assertSameOrigin,
@@ -15,7 +16,7 @@ export async function POST(request) {
   if (csrf) return csrf;
 
   const store = pruneExpired(await readAuthStore());
-  if (store.users.length > 0) {
+  if (envAdminConfigured() || store.users.length > 0) {
     return jsonError("Setup has already been completed.", 409);
   }
 
@@ -74,6 +75,6 @@ export async function POST(request) {
 
   const session = await createSession(created.id, request);
   const response = NextResponse.json({ user: publicUser(created) });
-  await setSessionCookie(response, session.id);
+  await setSessionCookie(response, session);
   return response;
 }

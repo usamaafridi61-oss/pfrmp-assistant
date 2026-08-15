@@ -31,7 +31,22 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 
 ## Deploy on Vercel
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+The local administrator account is stored in `data/auth-store.json`, which is not committed to Git. Vercel therefore starts with no users and shows **Create administrator** until you set login credentials as environment variables.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+In the Vercel project go to **Settings → Environment Variables** and add:
+
+| Name | Example |
+| --- | --- |
+| `AUTH_ADMIN_USERNAME` | your existing admin username |
+| `AUTH_ADMIN_PASSWORD` | your existing admin password |
+| `AUTH_ADMIN_NAME` | optional display name |
+| `AUTH_SECRET` | a random string, 32+ characters |
+
+Then **Redeploy**. The live site will open the sign-in page instead of setup. Use the username and password you set above.
+
+`AUTH_SECRET` should stay the same across deploys so existing sessions stay valid. Generate one with:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
+```
 "# pfrmp-assistant" 

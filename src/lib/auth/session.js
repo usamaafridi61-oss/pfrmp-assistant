@@ -8,6 +8,7 @@ import {
   SESSION_MAX_AGE_MS,
 } from "@/lib/auth/constants";
 import { randomToken, signValue, verifySignedValue } from "@/lib/auth/crypto";
+import { ENV_ADMIN_ID, getEnvAdmin } from "@/lib/auth/envAdmin";
 import { publicUser } from "@/lib/auth/password";
 import { nowIso, pruneExpired, readAuthStore, updateAuthStore } from "@/lib/auth/store";
 
@@ -30,22 +31,76 @@ export function clientMeta(request) {
   };
 }
 
+function findUser(store, userId) {
+  const user = store.users.find((u) => u.id === userId);
+  if (user) return user;
+  const envUser = getEnvAdmin();
+  if (envUser && userId === ENV_ADMIN_ID) return envUser;
+  return null;
+}
+
+export async function encodeSessionToken(session) {
+  const payload = Buffer.from(
+    JSON.stringify({
+      sid: session.id,
+      uid: session.userId,
+      exp: new Date(session.expiresAt).getTime(),
+      seen: new Date(session.lastSeenAt).getTime(),
+    }),
+    "utf8"
+  ).toString("base64url");
+  return signValue(payload);
+}
+
+export async function decodeSessionToken(token) {
+  const payload = await verifySignedValue(token);
+  if (!payload) return null;
+  try {
+    const data = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+    if (data?.sid && data?.uid && data?.exp) return data;
+  } catch {
+    /* legacy cookies stored only the session id */
+  }
+  return { sid: payload, uid: null, exp: null, seen: null, legacy: true };
+}
+
 export async function getSessionFromRequest(request) {
   const token = request.cookies.get(AUTH_COOKIE)?.value;
   if (!token) return null;
-  const sessionId = await verifySignedValue(token);
-  if (!sessionId) return null;
+  const data = await decodeSessionToken(token);
+  if (!data) return null;
 
   const store = pruneExpired(await readAuthStore());
-  const session = store.sessions.find((s) => s.id === sessionId && !s.revokedAt);
-  if (!session) return null;
-
   const now = Date.now();
-  if (new Date(session.expiresAt).getTime() <= now) return null;
-  if (now - new Date(session.lastSeenAt).getTime() > SESSION_IDLE_MS) return null;
 
-  const user = store.users.find((u) => u.id === session.userId);
+  if (data.legacy) {
+    const session = store.sessions.find((s) => s.id === data.sid && !s.revokedAt);
+    if (!session) return null;
+    if (new Date(session.expiresAt).getTime() <= now) return null;
+    if (now - new Date(session.lastSeenAt).getTime() > SESSION_IDLE_MS) return null;
+    const user = findUser(store, session.userId);
+    if (!user || user.disabled) return null;
+    return { session, user };
+  }
+
+  if (data.exp <= now) return null;
+  if (now - Number(data.seen || data.exp) > SESSION_IDLE_MS) return null;
+
+  const stored = store.sessions.find((s) => s.id === data.sid);
+  if (stored?.revokedAt) return null;
+
+  const user = findUser(store, data.uid);
   if (!user || user.disabled) return null;
+
+  const session = stored || {
+    id: data.sid,
+    userId: data.uid,
+    createdAt: new Date(Math.max(0, data.exp - SESSION_MAX_AGE_MS)).toISOString(),
+    lastSeenAt: new Date(data.seen).toISOString(),
+    expiresAt: new Date(data.exp).toISOString(),
+    ip: "",
+    userAgent: "",
+  };
 
   return { session, user };
 }
@@ -118,8 +173,8 @@ export async function revokeUserSessions(userId, exceptId = null) {
   });
 }
 
-export async function setSessionCookie(response, sessionId) {
-  const token = await signValue(sessionId);
+export async function setSessionCookie(response, session) {
+  const token = await encodeSessionToken(session);
   response.cookies.set(AUTH_COOKIE, token, cookieOptions());
 }
 

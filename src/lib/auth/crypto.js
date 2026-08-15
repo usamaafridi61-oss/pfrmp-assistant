@@ -33,6 +33,17 @@ export async function getAuthSecret() {
     return cachedSecret;
   }
 
+  if (process.env.VERCEL) {
+    const fallback = String(process.env.AUTH_ADMIN_PASSWORD || "");
+    if (fallback.length >= 8) {
+      cachedSecret = createHash("sha256")
+        .update(`pfrmp-auth-secret:${fallback}`)
+        .digest("base64url");
+      return cachedSecret;
+    }
+    throw new Error("Set AUTH_SECRET (32+ characters) in Vercel environment variables.");
+  }
+
   const file = secretFilePath();
   try {
     const existing = (await fs.readFile(file, "utf-8")).trim();

@@ -15,14 +15,18 @@ export default function SetupPage() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [blocked, setBlocked] = useState(false);
+  const [hosted, setHosted] = useState(false);
+  const [statusReady, setStatusReady] = useState(false);
 
   useEffect(() => {
     fetch("/api/auth/status", { cache: "no-store" })
       .then((res) => res.json())
       .then((data) => {
         if (!data.setupRequired) setBlocked(true);
+        if (data.hosted) setHosted(true);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setStatusReady(true));
   }, []);
 
   async function onSubmit(event) {
@@ -50,6 +54,16 @@ export default function SetupPage() {
     }
   }
 
+  if (!statusReady) {
+    return (
+      <main className="auth-screen">
+        <div className="auth-card">
+          <p className="sub">Checking setup…</p>
+        </div>
+      </main>
+    );
+  }
+
   if (blocked) {
     return (
       <main className="auth-screen">
@@ -59,6 +73,42 @@ export default function SetupPage() {
           <a className="btn-primary auth-submit" href="/login">
             Go to sign in
           </a>
+        </div>
+      </main>
+    );
+  }
+
+  if (hosted) {
+    return (
+      <main className="auth-screen">
+        <div className="auth-card">
+          <div className="auth-brand">
+            <span className="brand-crest">
+              <BrandMark />
+            </span>
+            <div>
+              <p className="auth-kicker">Vercel deployment</p>
+              <h1>Sign-in credentials</h1>
+            </div>
+          </div>
+          <p className="sub">
+            Accounts created on your laptop are not copied to Vercel. Add these environment
+            variables in the Vercel project, then redeploy. The site will open the login page.
+          </p>
+          <ol className="auth-steps">
+            <li>
+              Open Vercel → Project → <strong>Settings → Environment Variables</strong>
+            </li>
+            <li>
+              Add <code>AUTH_ADMIN_USERNAME</code> and <code>AUTH_ADMIN_PASSWORD</code> using the
+              administrator you already created locally
+            </li>
+            <li>
+              Add <code>AUTH_SECRET</code> (32+ random characters) and keep it the same on every
+              deploy
+            </li>
+            <li>Redeploy the project, then sign in</li>
+          </ol>
         </div>
       </main>
     );

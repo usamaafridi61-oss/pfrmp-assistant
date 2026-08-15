@@ -1,7 +1,13 @@
 import { promises as fs } from "fs";
 import path from "path";
+import { mergeEnvAdmin } from "@/lib/auth/envAdmin";
 
-const STORE_FILE = path.resolve(process.cwd(), "data", "auth-store.json");
+function storeFilePath() {
+  if (process.env.VERCEL) {
+    return path.join("/tmp", "pfrmp-auth-store.json");
+  }
+  return path.resolve(process.cwd(), "data", "auth-store.json");
+}
 
 const EMPTY_STORE = {
   users: [],
@@ -13,6 +19,7 @@ const EMPTY_STORE = {
 };
 
 let queue = Promise.resolve();
+let memoryStore = null;
 
 function enqueue(fn) {
   const run = queue.then(fn, fn);
@@ -23,20 +30,51 @@ function enqueue(fn) {
   return run;
 }
 
+function cloneEmpty() {
+  return {
+    users: [],
+    sessions: [],
+    challenges: [],
+    totpSetups: [],
+    loginAttempts: [],
+    auditLog: [],
+  };
+}
+
+function persistableStore(store) {
+  return {
+    users: (store.users || []).filter((user) => !user.fromEnv),
+    sessions: store.sessions || [],
+    challenges: store.challenges || [],
+    totpSetups: store.totpSetups || [],
+    loginAttempts: store.loginAttempts || [],
+    auditLog: store.auditLog || [],
+  };
+}
+
+function isIgnorableFsError(err) {
+  return err?.code === "EROFS" || err?.code === "EPERM" || err?.code === "EACCES" || err?.code === "ENOENT";
+}
+
 async function readStoreUnlocked() {
+  if (memoryStore) return memoryStore;
   try {
-    const raw = await fs.readFile(STORE_FILE, "utf-8");
+    const raw = await fs.readFile(storeFilePath(), "utf-8");
     const parsed = JSON.parse(raw);
-    return {
+    memoryStore = mergeEnvAdmin({
       users: Array.isArray(parsed.users) ? parsed.users : [],
       sessions: Array.isArray(parsed.sessions) ? parsed.sessions : [],
       challenges: Array.isArray(parsed.challenges) ? parsed.challenges : [],
       totpSetups: Array.isArray(parsed.totpSetups) ? parsed.totpSetups : [],
       loginAttempts: Array.isArray(parsed.loginAttempts) ? parsed.loginAttempts : [],
       auditLog: Array.isArray(parsed.auditLog) ? parsed.auditLog : [],
-    };
+    });
+    return memoryStore;
   } catch (err) {
-    if (err.code === "ENOENT") return { ...EMPTY_STORE, users: [], sessions: [], challenges: [], totpSetups: [], loginAttempts: [], auditLog: [] };
+    if (err.code === "ENOENT") {
+      memoryStore = mergeEnvAdmin(cloneEmpty());
+      return memoryStore;
+    }
     throw err;
   }
 }
@@ -46,22 +84,22 @@ function sleep(ms) {
 }
 
 async function writeStoreUnlocked(store) {
-  await fs.mkdir(path.dirname(STORE_FILE), { recursive: true });
-  const tmp = `${STORE_FILE}.${process.pid}.${Date.now()}.tmp`;
-  await fs.writeFile(tmp, JSON.stringify(store, null, 2), "utf-8");
+  const file = storeFilePath();
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
+  await fs.writeFile(tmp, JSON.stringify(persistableStore(store), null, 2), "utf-8");
 
   const maxAttempts = 8;
   let lastError;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
       try {
-        await fs.rename(tmp, STORE_FILE);
+        await fs.rename(tmp, file);
       } catch (err) {
-        // Windows cannot always replace an in-use file with rename (EPERM/EACCES).
         if (err.code !== "EPERM" && err.code !== "EACCES" && err.code !== "EEXIST" && err.code !== "EBUSY") {
           throw err;
         }
-        await fs.copyFile(tmp, STORE_FILE);
+        await fs.copyFile(tmp, file);
         await fs.unlink(tmp).catch(() => undefined);
       }
       return;
@@ -86,8 +124,13 @@ export function updateAuthStore(mutator) {
     const store = await readStoreUnlocked();
     const next = await mutator(store);
     const value = next || store;
-    await writeStoreUnlocked(value);
-    return value;
+    memoryStore = mergeEnvAdmin(value);
+    try {
+      await writeStoreUnlocked(memoryStore);
+    } catch (err) {
+      if (!isIgnorableFsError(err)) throw err;
+    }
+    return memoryStore;
   });
 }
 
@@ -105,3 +148,5 @@ export function pruneExpired(store, now = Date.now()) {
   }
   return store;
 }
+
+export { EMPTY_STORE };

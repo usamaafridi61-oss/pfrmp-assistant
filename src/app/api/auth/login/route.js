@@ -13,6 +13,7 @@ import {
   userPayload,
 } from "@/lib/auth/session";
 import { REQUIRE_TOTP } from "@/lib/auth/constants";
+import { verifyEnvAdminPassword } from "@/lib/auth/envAdmin";
 import { pruneExpired, readAuthStore, updateAuthStore } from "@/lib/auth/store";
 import { verifyTotpCode } from "@/lib/auth/totp";
 
@@ -25,7 +26,7 @@ async function finishLogin(user, request) {
     user: userPayload(user),
     requiresTotp: false,
   });
-  await setSessionCookie(response, session.id);
+  await setSessionCookie(response, session);
   return response;
 }
 
@@ -94,7 +95,9 @@ export async function POST(request) {
 
   const store = pruneExpired(await readAuthStore());
   const user = store.users.find((u) => u.usernameLower === username.toLowerCase());
-  const valid = await verifyPassword(password, user?.passwordHash || (await dummyHashPromise));
+  const valid = user?.fromEnv
+    ? verifyEnvAdminPassword(password)
+    : await verifyPassword(password, user?.passwordHash || (await dummyHashPromise));
 
   if (!user || user.disabled || !valid) {
     await recordFailedLogin(username, request);
