@@ -4,6 +4,8 @@ import { useState, useRef, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useData } from "@/context/DataContext";
+import { useAuth } from "@/context/AuthContext";
+import BrandMark from "@/components/BrandMark";
 
 const NAV_MENUS = [
   {
@@ -49,7 +51,7 @@ const NAV_MENUS = [
     ],
   },
   {
-    label: "NTFP Value Chains",
+    label: "NTFP",
     href: "/ntfp",
     icon: "hex",
     match: ["/ntfp"],
@@ -59,7 +61,7 @@ const NAV_MENUS = [
     ],
   },
   {
-    label: "Capacity Building",
+    label: "Capacity",
     href: "/capacity-building",
     icon: "users",
     match: ["/capacity-building"],
@@ -71,7 +73,7 @@ const NAV_MENUS = [
     ],
   },
   {
-    label: "GIS / Spatial Map",
+    label: "GIS",
     href: "/gis",
     icon: "map",
     match: ["/gis"],
@@ -235,31 +237,24 @@ function Icon({ name, size = 16 }) {
           <path d="m6 9 6 6 6-6" />
         </svg>
       );
+    case "lock":
+      return (
+        <svg {...props}>
+          <rect x="5" y="11" width="14" height="10" rx="2" />
+          <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+        </svg>
+      );
+    case "logout":
+      return (
+        <svg {...props}>
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+          <path d="m16 17 5-5-5-5" />
+          <path d="M21 12H9" />
+        </svg>
+      );
     default:
       return null;
   }
-}
-
-function BrandMark() {
-  return (
-    <svg className="brand-crest-svg" viewBox="0 0 40 40" aria-hidden="true">
-      <defs>
-        <linearGradient id="crestGrad" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#2d8a4e" />
-          <stop offset="100%" stopColor="#14532d" />
-        </linearGradient>
-      </defs>
-      <rect width="40" height="40" rx="10" fill="url(#crestGrad)" />
-      <path
-        d="M20 8c6.5 3.2 9.5 8.2 9.5 14.2 0 5.4-3.8 8.8-9.5 9.8-5.7-1-9.5-4.4-9.5-9.8C10.5 16.2 13.5 11.2 20 8Z"
-        fill="#ecfdf5"
-        opacity="0.95"
-      />
-      <path d="M20 12.5v17" stroke="#166534" strokeWidth="1.6" strokeLinecap="round" />
-      <path d="M20 18c-3.2.4-5.4 2-6.6 4.4" stroke="#166534" strokeWidth="1.4" fill="none" strokeLinecap="round" />
-      <path d="M20 15.5c2.8.6 4.8 2 6 4.2" stroke="#166534" strokeWidth="1.4" fill="none" strokeLinecap="round" />
-    </svg>
-  );
 }
 
 function isActive(pathname, href) {
@@ -274,18 +269,32 @@ function menuIsActive(pathname, menu) {
   });
 }
 
+const WRITE_HREFS = new Set(["/import", "/module-import", "/manual-entry"]);
+
+function visibleMenus(canWrite) {
+  if (canWrite) return NAV_MENUS;
+  return NAV_MENUS.map((menu) => ({
+    ...menu,
+    items: menu.items.filter((item) => !WRITE_HREFS.has(item.href)),
+  })).filter((menu) => menu.items.length > 0);
+}
+
 export default function Nav() {
   const pathname = usePathname();
   const router = useRouter();
   const { data } = useData();
+  const { user, canWrite, isAdmin, signOut } = useAuth();
 
   const [openMenu, setOpenMenu] = useState(null);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
+  const menus = visibleMenus(canWrite);
 
   const menusRef = useRef(null);
   const searchRef = useRef(null);
+  const userMenuRef = useRef(null);
   const searchInputRef = useRef(null);
   const closeTimer = useRef(null);
 
@@ -297,12 +306,16 @@ export default function Nav() {
       if (searchRef.current && !searchRef.current.contains(e.target)) {
         setSearchFocused(false);
       }
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target)) {
+        setUserMenuOpen(false);
+      }
     }
     function handleKeyDown(e) {
       if (e.key === "Escape") {
         setOpenMenu(null);
         setSearchFocused(false);
         setMobileOpen(false);
+        setUserMenuOpen(false);
       }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
@@ -322,6 +335,7 @@ export default function Nav() {
   useEffect(() => {
     setOpenMenu(null);
     setMobileOpen(false);
+    setUserMenuOpen(false);
     setSearchFocused(false);
   }, [pathname]);
 
@@ -483,6 +497,55 @@ export default function Nav() {
               )}
             </div>
 
+            <div className="nav-user-menu" ref={userMenuRef}>
+              <button
+                type="button"
+                className="nav-user-button"
+                onClick={() => setUserMenuOpen((open) => !open)}
+                aria-expanded={userMenuOpen}
+                aria-label="Account menu"
+              >
+                <span className="nav-user-avatar">{(user?.displayName || user?.username || "U").slice(0, 1).toUpperCase()}</span>
+                <span className="nav-user-meta">
+                  <strong>{user?.displayName || user?.username}</strong>
+                  <span>{user?.role}</span>
+                </span>
+              </button>
+              {userMenuOpen && (
+                <div className="nav-user-dropdown">
+                  <a href="/account" className="dropdown-item-link" onClick={(e) => navigateTo("/account", e)}>
+                    <span className="item-icon-box">
+                      <Icon name="lock" size={16} />
+                    </span>
+                    <span className="item-text-box">
+                      <strong>Account security</strong>
+                      <span>Password and sessions</span>
+                    </span>
+                  </a>
+                  {isAdmin ? (
+                    <a href="/admin/users" className="dropdown-item-link" onClick={(e) => navigateTo("/admin/users", e)}>
+                      <span className="item-icon-box">
+                        <Icon name="users" size={16} />
+                      </span>
+                      <span className="item-text-box">
+                        <strong>Manage users</strong>
+                        <span>Roles and account access</span>
+                      </span>
+                    </a>
+                  ) : null}
+                  <button type="button" className="dropdown-item-link nav-signout" onClick={signOut}>
+                    <span className="item-icon-box">
+                      <Icon name="logout" size={16} />
+                    </span>
+                    <span className="item-text-box">
+                      <strong>Sign out</strong>
+                      <span>End this session</span>
+                    </span>
+                  </button>
+                </div>
+              )}
+            </div>
+
             <button
               type="button"
               className="mobile-nav-toggle"
@@ -499,7 +562,7 @@ export default function Nav() {
       <nav className="app-nav-bottom" aria-label="Primary">
         <div className="app-nav-container">
           <div className="app-nav-center-group" ref={menusRef}>
-            {NAV_MENUS.map((menu) => {
+            {menus.map((menu) => {
               const active = menuIsActive(pathname, menu);
               const open = openMenu === menu.label;
               return (
@@ -566,7 +629,7 @@ export default function Nav() {
 
       {mobileOpen && (
         <div className="mobile-nav-drawer">
-          {NAV_MENUS.map((menu) => (
+          {menus.map((menu) => (
             <div key={menu.label} className="mobile-category-block">
               <div className="mobile-category-title">{menu.label}</div>
               <div className="mobile-links-list">
@@ -586,6 +649,31 @@ export default function Nav() {
               </div>
             </div>
           ))}
+          <div className="mobile-category-block">
+            <div className="mobile-category-title">Account</div>
+            <div className="mobile-links-list">
+              <a href="/account" className="mobile-link" onClick={(e) => navigateTo("/account", e)}>
+                <span className="mobile-link-icon">
+                  <Icon name="lock" size={16} />
+                </span>
+                <span>Account security</span>
+              </a>
+              {isAdmin ? (
+                <a href="/admin/users" className="mobile-link" onClick={(e) => navigateTo("/admin/users", e)}>
+                  <span className="mobile-link-icon">
+                    <Icon name="users" size={16} />
+                  </span>
+                  <span>Manage users</span>
+                </a>
+              ) : null}
+              <button type="button" className="mobile-link" onClick={signOut}>
+                <span className="mobile-link-icon">
+                  <Icon name="logout" size={16} />
+                </span>
+                <span>Sign out</span>
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </header>

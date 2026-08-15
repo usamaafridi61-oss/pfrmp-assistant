@@ -1,4 +1,9 @@
+import { requireAuth } from "@/lib/auth/guard";
+
 export async function GET(request, { params }) {
+  const auth = await requireAuth(request);
+  if (auth.error) return auth.error;
+
   const enabled = Boolean(process.env.GOOGLE_EARTH_ENGINE_CREDENTIALS);
   if (!enabled) {
     return new Response(

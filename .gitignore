@@ -33,6 +33,11 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# authentication store and signing secret
+/data/auth-store.json
+/data/.auth-secret
+/data/*.tmp
+
 # vercel
 .vercel
 

@@ -1,5 +1,5 @@
 import { createSeedCapacityPlanItems, isMalformedCapacityPlan } from "@/lib/capacityBuilding/seed";
-import { isMalformedNtfpActionItems } from "@/lib/ntfp/import";
+import { isMalformedNtfpActionItems } from "@/lib/ntfp/validate";
 
 const now = () => new Date().toISOString();
 

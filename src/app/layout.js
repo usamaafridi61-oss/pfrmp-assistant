@@ -1,7 +1,5 @@
 import "./globals.css";
-import Nav from "@/components/Nav";
-import { DataProvider } from "@/context/DataContext";
-import AppShell from "@/components/AppShell";
+import AppFrame from "@/components/AppFrame";
 
 export const metadata = {
   title: "PFRMP Assistant",
@@ -12,10 +10,7 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body suppressHydrationWarning>
-        <DataProvider>
-          <Nav />
-          <AppShell>{children}</AppShell>
-        </DataProvider>
+        <AppFrame>{children}</AppFrame>
       </body>
     </html>
   );

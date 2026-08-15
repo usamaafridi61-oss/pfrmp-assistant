@@ -1,4 +1,9 @@
+import { requireAuth } from "@/lib/auth/guard";
+
 export async function POST(request) {
+  const auth = await requireAuth(request, { write: true });
+  if (auth.error) return auth.error;
+
   try {
     const body = await request.json();
     const enabled = Boolean(process.env.GOOGLE_EARTH_ENGINE_CREDENTIALS);
