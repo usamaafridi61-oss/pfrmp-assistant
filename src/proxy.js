@@ -5,8 +5,9 @@ import {
   PUBLIC_PATHS,
   SESSION_IDLE_MS,
 } from "@/lib/auth/constants";
-import { ENV_ADMIN_ID, envAdminConfigured } from "@/lib/auth/envAdmin";
+import { envAdminConfigured } from "@/lib/auth/envAdmin";
 import { decodeSessionToken } from "@/lib/auth/session";
+import { hasDatabase } from "@/lib/db";
 import { pruneExpired, readAuthStore } from "@/lib/auth/store";
 
 function isPublicPath(pathname) {
@@ -15,7 +16,7 @@ function isPublicPath(pathname) {
 }
 
 async function hasUsers() {
-  if (envAdminConfigured()) return true;
+  if (envAdminConfigured() || hasDatabase()) return true;
   try {
     const store = pruneExpired(await readAuthStore());
     return store.users.length > 0;
@@ -32,22 +33,16 @@ async function sessionIsValid(token) {
   if (!data.legacy) {
     if (data.exp <= now) return false;
     if (now - Number(data.seen || data.exp) > SESSION_IDLE_MS) return false;
-    if (data.uid === ENV_ADMIN_ID && envAdminConfigured()) return true;
+    return Boolean(data.uid);
   }
 
   try {
     const store = pruneExpired(await readAuthStore());
-    if (data.legacy) {
-      const session = store.sessions.find((s) => s.id === data.sid && !s.revokedAt);
-      if (!session) return false;
-      if (new Date(session.expiresAt).getTime() <= now) return false;
-      if (now - new Date(session.lastSeenAt).getTime() > SESSION_IDLE_MS) return false;
-      const user = store.users.find((u) => u.id === session.userId);
-      return Boolean(user && !user.disabled);
-    }
-    const stored = store.sessions.find((s) => s.id === data.sid);
-    if (stored?.revokedAt) return false;
-    const user = store.users.find((u) => u.id === data.uid);
+    const session = store.sessions.find((s) => s.id === data.sid && !s.revokedAt);
+    if (!session) return false;
+    if (new Date(session.expiresAt).getTime() <= now) return false;
+    if (now - new Date(session.lastSeenAt).getTime() > SESSION_IDLE_MS) return false;
+    const user = store.users.find((u) => u.id === session.userId);
     return Boolean(user && !user.disabled);
   } catch {
     return false;

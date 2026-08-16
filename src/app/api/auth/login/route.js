@@ -34,6 +34,16 @@ export async function POST(request) {
   const csrf = assertSameOrigin(request);
   if (csrf) return csrf;
 
+  try {
+    return await handleLogin(request);
+  } catch (err) {
+    console.error("login failed", err);
+    return jsonError("Could not sign in. Check DATABASE_URL on Vercel and try again.", 500);
+  }
+}
+
+async function handleLogin(request) {
+
   let body;
   try {
     body = await request.json();

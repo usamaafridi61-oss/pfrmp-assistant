@@ -19,10 +19,14 @@ function parseEnvFile(raw) {
 }
 
 function cleanUrl(url) {
-  return String(url || "")
-    .replace(/[?&]channel_binding=require/g, "")
-    .replace(/\?&/, "?")
-    .replace(/\?$/, "");
+  const raw = String(url || "");
+  try {
+    const parsed = new URL(raw);
+    parsed.searchParams.delete("channel_binding");
+    return parsed.toString();
+  } catch {
+    return raw;
+  }
 }
 
 async function main() {

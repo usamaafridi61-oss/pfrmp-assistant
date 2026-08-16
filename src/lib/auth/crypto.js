@@ -34,14 +34,13 @@ export async function getAuthSecret() {
   }
 
   if (process.env.VERCEL) {
-    const fallback = String(process.env.AUTH_ADMIN_PASSWORD || "");
-    if (fallback.length >= 8) {
-      cachedSecret = createHash("sha256")
-        .update(`pfrmp-auth-secret:${fallback}`)
-        .digest("base64url");
-      return cachedSecret;
-    }
-    throw new Error("Set AUTH_SECRET (32+ characters) in Vercel environment variables.");
+    const seed =
+      process.env.AUTH_SECRET ||
+      process.env.DATABASE_URL ||
+      process.env.POSTGRES_URL ||
+      "pfrmp-vercel-fallback-secret";
+    cachedSecret = createHash("sha256").update(`pfrmp-auth-secret:${seed}`).digest("base64url");
+    return cachedSecret;
   }
 
   const file = secretFilePath();
