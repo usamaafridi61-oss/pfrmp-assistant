@@ -1,5 +1,6 @@
 import { promises as fs } from "fs";
 import path from "path";
+import { AUTH_KEY, hasDatabase, kvGet, kvSet } from "@/lib/db";
 import { mergeEnvAdmin } from "@/lib/auth/envAdmin";
 
 function storeFilePath() {
@@ -41,6 +42,17 @@ function cloneEmpty() {
   };
 }
 
+function normalizeStore(parsed) {
+  return mergeEnvAdmin({
+    users: Array.isArray(parsed?.users) ? parsed.users : [],
+    sessions: Array.isArray(parsed?.sessions) ? parsed.sessions : [],
+    challenges: Array.isArray(parsed?.challenges) ? parsed.challenges : [],
+    totpSetups: Array.isArray(parsed?.totpSetups) ? parsed.totpSetups : [],
+    loginAttempts: Array.isArray(parsed?.loginAttempts) ? parsed.loginAttempts : [],
+    auditLog: Array.isArray(parsed?.auditLog) ? parsed.auditLog : [],
+  });
+}
+
 function persistableStore(store) {
   return {
     users: (store.users || []).filter((user) => !user.fromEnv),
@@ -58,21 +70,18 @@ function isIgnorableFsError(err) {
 
 async function readStoreUnlocked() {
   if (memoryStore) return memoryStore;
+  if (hasDatabase()) {
+    const parsed = await kvGet(AUTH_KEY);
+    memoryStore = normalizeStore(parsed || cloneEmpty());
+    return memoryStore;
+  }
   try {
     const raw = await fs.readFile(storeFilePath(), "utf-8");
-    const parsed = JSON.parse(raw);
-    memoryStore = mergeEnvAdmin({
-      users: Array.isArray(parsed.users) ? parsed.users : [],
-      sessions: Array.isArray(parsed.sessions) ? parsed.sessions : [],
-      challenges: Array.isArray(parsed.challenges) ? parsed.challenges : [],
-      totpSetups: Array.isArray(parsed.totpSetups) ? parsed.totpSetups : [],
-      loginAttempts: Array.isArray(parsed.loginAttempts) ? parsed.loginAttempts : [],
-      auditLog: Array.isArray(parsed.auditLog) ? parsed.auditLog : [],
-    });
+    memoryStore = normalizeStore(JSON.parse(raw));
     return memoryStore;
   } catch (err) {
     if (err.code === "ENOENT") {
-      memoryStore = mergeEnvAdmin(cloneEmpty());
+      memoryStore = normalizeStore(cloneEmpty());
       return memoryStore;
     }
     throw err;
@@ -84,10 +93,16 @@ function sleep(ms) {
 }
 
 async function writeStoreUnlocked(store) {
+  const payload = persistableStore(store);
+  if (hasDatabase()) {
+    await kvSet(AUTH_KEY, payload);
+    return;
+  }
+
   const file = storeFilePath();
   await fs.mkdir(path.dirname(file), { recursive: true });
   const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
-  await fs.writeFile(tmp, JSON.stringify(persistableStore(store), null, 2), "utf-8");
+  await fs.writeFile(tmp, JSON.stringify(payload, null, 2), "utf-8");
 
   const maxAttempts = 8;
   let lastError;
@@ -124,7 +139,7 @@ export function updateAuthStore(mutator) {
     const store = await readStoreUnlocked();
     const next = await mutator(store);
     const value = next || store;
-    memoryStore = mergeEnvAdmin(value);
+    memoryStore = normalizeStore(value);
     try {
       await writeStoreUnlocked(memoryStore);
     } catch (err) {

@@ -37,16 +37,20 @@ In the Vercel project go to **Settings → Environment Variables** and add:
 
 | Name | Example |
 | --- | --- |
-| `AUTH_ADMIN_USERNAME` | your existing admin username |
-| `AUTH_ADMIN_PASSWORD` | your existing admin password |
-| `AUTH_ADMIN_NAME` | optional display name |
+| `DATABASE_URL` | your Neon `DATABASE_URL` from `.env` |
 | `AUTH_SECRET` | a random string, 32+ characters |
 
-Then **Redeploy**. The live site will open the sign-in page instead of setup. Use the username and password you set above.
+Then **Redeploy**. The live site will load users and app data from Neon. Sign in with the same local accounts (for example `Muhammad-usama`).
 
 `AUTH_SECRET` should stay the same across deploys so existing sessions stay valid. Generate one with:
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
+```
+
+To copy local files into Neon again later:
+
+```bash
+npm run push-db
 ```
 "# pfrmp-assistant" 
