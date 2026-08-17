@@ -15,7 +15,7 @@ export const ROLE_LABELS = {
 export const WRITE_ROLES = new Set([ROLES.ADMIN, ROLES.EDITOR]);
 
 export const SESSION_MAX_AGE_MS = 12 * 60 * 60 * 1000;
-export const SESSION_IDLE_MS = 45 * 60 * 1000;
+export const SESSION_IDLE_MS = SESSION_MAX_AGE_MS;
 export const LOGIN_CHALLENGE_MS = 5 * 60 * 1000;
 export const TOTP_SETUP_MS = 10 * 60 * 1000;
 

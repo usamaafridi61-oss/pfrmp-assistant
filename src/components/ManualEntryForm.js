@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { applyManualEntry, createManualEntry } from "@/lib/storage";
 import { getEffectivePuIntervention } from "@/lib/metrics";
 
@@ -18,10 +18,44 @@ const EMPTY = {
   remarks: "",
 };
 
-export default function ManualEntryForm({ data, setData, defaults = {}, onSuccess }) {
+function entryToForm(entry) {
+  return {
+    divisionId: entry.divisionId || "",
+    planningUnitId: entry.planningUnitId || "",
+    interventionId: entry.interventionId || "",
+    entryType: entry.entryType || "progress",
+    date: entry.date || new Date().toISOString().slice(0, 10),
+    targetValue: entry.targetValue ?? "",
+    achievedValue: entry.achievedValue ?? "",
+    balanceValue: entry.balanceValue ?? "",
+    maleBeneficiaries: entry.maleBeneficiaries ?? "",
+    femaleBeneficiaries: entry.femaleBeneficiaries ?? "",
+    remarks: entry.remarks || "",
+  };
+}
+
+export default function ManualEntryForm({
+  data,
+  setData,
+  defaults = {},
+  editingEntry = null,
+  createdBy = "User",
+  onSuccess,
+  onCancel,
+}) {
   const [form, setForm] = useState({ ...EMPTY, ...defaults });
   const [confirmOverride, setConfirmOverride] = useState(false);
   const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    if (editingEntry) {
+      setForm(entryToForm(editingEntry));
+      setConfirmOverride(false);
+      setMessage("");
+    } else {
+      setForm({ ...EMPTY, ...defaults, date: new Date().toISOString().slice(0, 10) });
+    }
+  }, [editingEntry]);
 
   const pusInDivision = useMemo(
     () => data.planningUnits.filter((p) => p.divisionId === form.divisionId),
@@ -75,16 +109,24 @@ export default function ManualEntryForm({ data, setData, defaults = {}, onSucces
       setMessage(err);
       return;
     }
-    const entry = createManualEntry(form);
+    const entry = createManualEntry(
+      { ...form, createdBy: editingEntry?.createdBy || createdBy },
+      editingEntry
+    );
     setData(applyManualEntry(data, entry));
-    setMessage("Manual entry saved.");
-    setForm({ ...EMPTY, ...defaults });
+    setMessage(editingEntry ? "Manual entry updated." : "Manual entry saved.");
     setConfirmOverride(false);
+    if (!editingEntry) {
+      setForm({ ...EMPTY, ...defaults, date: new Date().toISOString().slice(0, 10) });
+    }
     onSuccess?.();
   }
 
   return (
     <form onSubmit={handleSubmit} className="manual-entry-form">
+      {editingEntry ? (
+        <p className="small muted">Editing a submitted entry. Save to replace the stored values.</p>
+      ) : null}
       <div className="form-grid">
         <div>
           <label>Forest Division *</label>
@@ -163,7 +205,14 @@ export default function ManualEntryForm({ data, setData, defaults = {}, onSucces
         <input type="checkbox" checked={confirmOverride} onChange={(e) => setConfirmOverride(e.target.checked)} />
         Confirm override when achieved exceeds target
       </label>
-      <button type="submit">Save Manual Entry</button>
+      <div className="form-actions-row">
+        <button type="submit">{editingEntry ? "Update Entry" : "Save Manual Entry"}</button>
+        {editingEntry ? (
+          <button type="button" className="btn-secondary" onClick={onCancel}>
+            Cancel
+          </button>
+        ) : null}
+      </div>
       {message && <p className="form-message">{message}</p>}
     </form>
   );

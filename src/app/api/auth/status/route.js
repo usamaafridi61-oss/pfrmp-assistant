@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { envAdminConfigured } from "@/lib/auth/envAdmin";
-import { hasDatabase } from "@/lib/db";
+import { hasDatabase } from "@/lib/db-env";
 import { pruneExpired, readAuthStore } from "@/lib/auth/store";
 
 export const dynamic = "force-dynamic";

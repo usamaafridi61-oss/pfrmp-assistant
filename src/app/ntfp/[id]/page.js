@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useData } from "@/context/DataContext";
+import { useAuth } from "@/context/AuthContext";
 import ActionPlanTable from "@/components/ntfp/ActionPlanTable";
 import ImportReviewPanel from "@/components/ntfp/ImportReviewPanel";
 import ProgressBar from "@/components/ProgressBar";
@@ -17,6 +18,12 @@ import {
   statusLabel,
 } from "@/lib/ntfp/metrics";
 import { applyNtfpImport, parseNtfpActionPlanFile } from "@/lib/ntfp/import";
+import {
+  createNtfpProgressRecord,
+  deleteNtfpProgress,
+  upsertNtfpProgress,
+} from "@/lib/ntfp/records";
+import AdminEntryActions from "@/components/AdminEntryActions";
 import { NTFP_STATUS } from "@/lib/modules/seed";
 
 const TABS = [
@@ -30,6 +37,7 @@ const TABS = [
 export default function ValueChainDetailPage() {
   const { id } = useParams();
   const { data, setData } = useData();
+  const { canWrite, isAdmin, user } = useAuth();
   const [tab, setTab] = useState("overview");
   const [selectedItem, setSelectedItem] = useState(null);
   const [editForm, setEditForm] = useState(null);
@@ -51,6 +59,7 @@ export default function ValueChainDetailPage() {
     locationText: "",
     remarks: "",
   });
+  const [editingProgress, setEditingProgress] = useState(null);
 
   const summary = useMemo(() => getValueChainSummary(data, id), [data, id]);
   const chain = summary?.chain;
@@ -128,6 +137,7 @@ export default function ValueChainDetailPage() {
 
   function handleSelectActivity(item) {
     setSelectedItem(item);
+    setEditingProgress(null);
     const m = computeActivityMetrics(item, summary.progressRecords);
     setProgressForm({
       date: new Date().toISOString().slice(0, 10),
@@ -143,65 +153,20 @@ export default function ValueChainDetailPage() {
   function saveProgress(e) {
     e.preventDefault();
     if (!selectedItem) return;
-    const timestamp = new Date().toISOString();
-    const addQty = Number(progressForm.completedQuantity) || 0;
-    const addExp =
-      progressForm.actualExpenditurePKR === ""
-        ? null
-        : Number(progressForm.actualExpenditurePKR) || 0;
-    const manualPct =
-      progressForm.manualProgressPercent === ""
-        ? null
-        : Number(progressForm.manualProgressPercent);
-
-    const existing = data.ntfpProgressRecords.filter((r) => r.actionItemId === selectedItem.id);
-    const prevQty = existing.reduce((s, r) => s + (r.completedQuantity || 0), 0);
-    const prevExp = existing.reduce((s, r) => s + (r.actualExpenditurePKR || 0), 0);
-    const target = selectedItem.targetQuantity || selectedItem.plannedQuantity || 0;
-    const newQty = prevQty + addQty;
-    const resultingProgressPercent =
-      target > 0
-        ? Math.min(100, (newQty / target) * 100)
-        : manualPct ?? 0;
-
-    const record = {
-      id: crypto.randomUUID(),
-      valueChainId: chain.id,
-      actionItemId: selectedItem.id,
-      date: progressForm.date,
-      completedQuantity: addQty,
-      manualProgressPercent: manualPct ?? undefined,
-      resultingProgressPercent,
-      status: progressForm.status,
-      actualExpenditurePKR: addExp ?? 0,
-      cumulativeCompletedQuantity: newQty,
-      cumulativeExpenditurePKR: prevExp + (addExp || 0),
-      locationText: progressForm.locationText || undefined,
-      remarks: progressForm.remarks || "Field progress record",
-      createdAt: timestamp,
-      createdBy: "user",
-    };
-
-    setData((prev) => ({
-      ...prev,
-      ntfpProgressRecords: [...prev.ntfpProgressRecords, record],
-      ntfpValueChains: prev.ntfpValueChains.map((c) =>
-        c.id === chain.id
-          ? {
-              ...c,
-              implementationStatus:
-                resultingProgressPercent >= 100 && summary.totalActivities <= 1
-                  ? "completed"
-                  : "in_progress",
-              lastUpdatedAt: timestamp,
-              updatedAt: timestamp,
-            }
-          : c
-      ),
-    }));
-
-    showToast(`Progress saved for activity ${selectedItem.actionCode}.`);
+    const record = createNtfpProgressRecord(progressForm, {
+      chainId: chain.id,
+      actionItem: selectedItem,
+      previous: editingProgress,
+      createdBy: user?.displayName || user?.username || "user",
+    });
+    setData(upsertNtfpProgress(data, record));
+    showToast(
+      editingProgress
+        ? `Progress updated for activity ${selectedItem.actionCode}.`
+        : `Progress saved for activity ${selectedItem.actionCode}.`
+    );
     setSelectedItem(null);
+    setEditingProgress(null);
   }
 
   async function handleFileSelect(e) {
@@ -316,6 +281,11 @@ export default function ValueChainDetailPage() {
         </div>
 
         <div className="page-header-actions">
+          {canWrite ? (
+            <Link href="/ntfp/manual-entry" className="btn-secondary">
+              Manual Entry
+            </Link>
+          ) : null}
           <button type="button" className="btn-primary" onClick={() => setImportModalOpen(true)}>
             Upload Action Plan
           </button>
@@ -653,6 +623,7 @@ export default function ValueChainDetailPage() {
                         <th>Progress</th>
                         <th>Status</th>
                         <th>Remarks</th>
+                        {isAdmin ? <th>Actions</th> : null}
                       </tr>
                     </thead>
                     <tbody>
@@ -672,6 +643,34 @@ export default function ValueChainDetailPage() {
                             </td>
                             <td>{statusLabel(rec.status || "in_progress")}</td>
                             <td>{rec.remarks || "—"}</td>
+                            {isAdmin ? (
+                              <td>
+                                <AdminEntryActions
+                                  isAdmin={isAdmin}
+                                  onEdit={() => {
+                                    const activity =
+                                      item || data.ntfpActionItems.find((i) => i.id === rec.actionItemId);
+                                    if (!activity) return;
+                                    setSelectedItem(activity);
+                                    setEditingProgress(rec);
+                                    setProgressForm({
+                                      date: rec.date || new Date().toISOString().slice(0, 10),
+                                      completedQuantity: rec.completedQuantity ?? "",
+                                      manualProgressPercent: rec.manualProgressPercent ?? "",
+                                      status: rec.status || "in_progress",
+                                      actualExpenditurePKR: rec.actualExpenditurePKR ?? "",
+                                      locationText: rec.locationText || "",
+                                      remarks: rec.remarks || "",
+                                    });
+                                  }}
+                                  onDelete={() => {
+                                    setData(deleteNtfpProgress(data, rec.id));
+                                    showToast("Progress record deleted.");
+                                  }}
+                                  deleteLabel="this NTFP progress record"
+                                />
+                              </td>
+                            ) : null}
                           </tr>
                         );
                       })}
@@ -896,11 +895,13 @@ export default function ValueChainDetailPage() {
       )}
 
       {selectedItem && selectedItemMetrics && (
-        <div className="drawer-backdrop" onClick={() => setSelectedItem(null)}>
+        <div className="drawer-backdrop" onClick={() => { setSelectedItem(null); setEditingProgress(null); }}>
           <aside className="progress-drawer" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <div>
-                <p className="drawer-kicker">Update Action Progress</p>
+                <p className="drawer-kicker">
+                  {editingProgress ? "Edit Action Progress" : "Update Action Progress"}
+                </p>
                 <span className="activity-code-badge">{selectedItem.actionCode}</span>
                 <h3>{selectedItem.actionTitle}</h3>
                 <p className="small muted">{chain.name}</p>
@@ -908,7 +909,10 @@ export default function ValueChainDetailPage() {
               <button
                 type="button"
                 className="modal-close-btn"
-                onClick={() => setSelectedItem(null)}
+                onClick={() => {
+                  setSelectedItem(null);
+                  setEditingProgress(null);
+                }}
               >
                 ✕
               </button>
@@ -1050,12 +1054,15 @@ export default function ValueChainDetailPage() {
 
               <div className="modal-actions">
                 <button type="submit" className="btn-primary">
-                  Save Progress
+                  {editingProgress ? "Update Progress" : "Save Progress"}
                 </button>
                 <button
                   type="button"
                   className="btn-secondary"
-                  onClick={() => setSelectedItem(null)}
+                  onClick={() => {
+                    setSelectedItem(null);
+                    setEditingProgress(null);
+                  }}
                 >
                   Cancel
                 </button>

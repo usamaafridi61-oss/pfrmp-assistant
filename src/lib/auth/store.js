@@ -1,6 +1,6 @@
 import { promises as fs } from "fs";
 import path from "path";
-import { AUTH_KEY, hasDatabase, kvGet, kvSet } from "@/lib/db";
+import { AUTH_KEY, hasDatabase } from "@/lib/db-env";
 import { mergeEnvAdmin } from "@/lib/auth/envAdmin";
 
 function storeFilePath() {
@@ -71,6 +71,7 @@ function isIgnorableFsError(err) {
 async function readStoreUnlocked() {
   if (memoryStore) return memoryStore;
   if (hasDatabase()) {
+    const { kvGet } = await import("@/lib/db");
     const parsed = await kvGet(AUTH_KEY);
     memoryStore = normalizeStore(parsed || cloneEmpty());
     return memoryStore;
@@ -95,6 +96,7 @@ function sleep(ms) {
 async function writeStoreUnlocked(store) {
   const payload = persistableStore(store);
   if (hasDatabase()) {
+    const { kvSet } = await import("@/lib/db");
     await kvSet(AUTH_KEY, payload);
     return;
   }

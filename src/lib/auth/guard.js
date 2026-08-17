@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { ROLES, WRITE_ROLES } from "@/lib/auth/constants";
-import { assertSameOrigin, getSessionFromRequest, jsonError, touchSession } from "@/lib/auth/session";
+import {
+  assertSameOrigin,
+  clearSessionCookie,
+  getSessionFromRequest,
+  jsonError,
+  touchSession,
+} from "@/lib/auth/session";
 
 export async function requireAuth(request, { write = false, admin = false } = {}) {
   const csrf = assertSameOrigin(request);
@@ -8,7 +14,9 @@ export async function requireAuth(request, { write = false, admin = false } = {}
 
   const auth = await getSessionFromRequest(request);
   if (!auth) {
-    return { error: jsonError("Sign in required.", 401) };
+    const error = jsonError("Sign in required.", 401);
+    clearSessionCookie(error, request);
+    return { error };
   }
 
   try {

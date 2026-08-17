@@ -14,13 +14,24 @@ export function DataProvider({ children }) {
 
   useEffect(() => {
     if (status !== "authenticated") return;
+    let cancelled = false;
+    const failSafe = setTimeout(() => {
+      if (!cancelled) setHydrated(true);
+    }, 10000);
+
     async function fetchData() {
       const loaded = await loadData();
+      if (cancelled) return;
       skipNextSave.current = true;
       setData(normalizeData(loaded));
       setHydrated(true);
     }
-    fetchData();
+
+    fetchData().finally(() => clearTimeout(failSafe));
+    return () => {
+      cancelled = true;
+      clearTimeout(failSafe);
+    };
   }, [status]);
 
   useEffect(() => {

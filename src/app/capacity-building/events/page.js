@@ -3,12 +3,17 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useData } from "@/context/DataContext";
+import { useAuth } from "@/context/AuthContext";
 import CapacityEventDrawer from "@/components/capacityBuilding/CapacityEventDrawer";
+import AdminEntryActions from "@/components/AdminEntryActions";
+import { deleteCapacityEvent } from "@/lib/capacityBuilding/records";
 import { getPlanItemMetrics, statusLabel } from "@/lib/capacityBuilding/metrics";
 
 export default function CapacityEventPage() {
   const { data, setData } = useData();
+  const { canWrite, isAdmin } = useAuth();
   const [drawer, setDrawer] = useState(null);
+  const [editingEvent, setEditingEvent] = useState(null);
   const [statusFilter, setStatusFilter] = useState("all");
 
   const rows = useMemo(() => {
@@ -37,6 +42,11 @@ export default function CapacityEventPage() {
           </p>
         </div>
         <div className="page-header-actions">
+          {canWrite ? (
+            <Link href="/capacity-building/manual-entry" className="btn-primary">
+              Manual Entry
+            </Link>
+          ) : null}
           <Link href="/capacity-building" className="btn-secondary">
             Back to Groups
           </Link>
@@ -77,7 +87,7 @@ export default function CapacityEventPage() {
                     <th>Status</th>
                     <th>Venue</th>
                     <th>Participants</th>
-                    <th></th>
+                    {isAdmin || canWrite ? <th></th> : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -96,17 +106,36 @@ export default function CapacityEventPage() {
                       </td>
                       <td>{event.venue || "—"}</td>
                       <td>{event.actualParticipants ?? "—"}</td>
-                      <td>
-                        {event.plan ? (
-                          <button
-                            type="button"
-                            className="btn-link"
-                            onClick={() => setDrawer(event.plan)}
-                          >
-                            Add another
-                          </button>
-                        ) : null}
-                      </td>
+                      {isAdmin || canWrite ? (
+                        <td>
+                          <span className="table-actions">
+                            {canWrite && event.plan ? (
+                              <button
+                                type="button"
+                                className="btn-link"
+                                onClick={() => {
+                                  setEditingEvent(null);
+                                  setDrawer(event.plan);
+                                }}
+                              >
+                                Add another
+                              </button>
+                            ) : null}
+                            <AdminEntryActions
+                              isAdmin={isAdmin}
+                              onEdit={() => {
+                                setEditingEvent(event);
+                                setDrawer(event.plan);
+                              }}
+                              onDelete={() => {
+                                setData(deleteCapacityEvent(data, event.id));
+                                if (editingEvent?.id === event.id) setEditingEvent(null);
+                              }}
+                              deleteLabel="this event"
+                            />
+                          </span>
+                        </td>
+                      ) : null}
                     </tr>
                   ))}
                 </tbody>
@@ -115,43 +144,52 @@ export default function CapacityEventPage() {
           )}
         </div>
 
-        <div className="card col-12">
-          <h3>Record a new event</h3>
-          <p className="small muted">
-            Choose an activity from the plan, then complete the event form in the side drawer.
-          </p>
-          <div className="form-grid" style={{ marginTop: 12 }}>
-            <div className="col-span-2">
-              <label>Capacity Building Activity</label>
-              <select
-                defaultValue=""
-                onChange={(e) => {
-                  const item = data.capacityPlanItems.find((p) => p.id === e.target.value);
-                  if (item) setDrawer(item);
-                  e.target.value = "";
-                }}
-              >
-                <option value="">Select activity to record…</option>
-                {data.capacityPlanItems.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.moduleCode} — {item.trainingSubject}
-                  </option>
-                ))}
-              </select>
+        {canWrite ? (
+          <div className="card col-12">
+            <h3>Record a new event</h3>
+            <p className="small muted">
+              Choose an activity from the plan, then complete the event form in the side drawer.
+            </p>
+            <div className="form-grid" style={{ marginTop: 12 }}>
+              <div className="col-span-2">
+                <label>Capacity Building Activity</label>
+                <select
+                  defaultValue=""
+                  onChange={(e) => {
+                    const item = data.capacityPlanItems.find((p) => p.id === e.target.value);
+                    if (item) {
+                      setEditingEvent(null);
+                      setDrawer(item);
+                    }
+                    e.target.value = "";
+                  }}
+                >
+                  <option value="">Select activity to record…</option>
+                  {data.capacityPlanItems.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.moduleCode} — {item.trainingSubject}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
-        </div>
+        ) : null}
       </section>
 
       {drawer && drawerMetrics ? (
         <CapacityEventDrawer
-          key={drawer.id}
+          key={`${drawer.id}-${editingEvent?.id || "new"}`}
           item={drawer}
           events={drawerMetrics.events || []}
           data={data}
           setData={setData}
           mode="record"
-          onClose={() => setDrawer(null)}
+          editingEvent={editingEvent}
+          onClose={() => {
+            setDrawer(null);
+            setEditingEvent(null);
+          }}
         />
       ) : null}
     </main>

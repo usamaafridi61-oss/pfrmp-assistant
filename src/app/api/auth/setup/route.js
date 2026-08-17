@@ -75,6 +75,6 @@ export async function POST(request) {
 
   const session = await createSession(created.id, request);
   const response = NextResponse.json({ user: publicUser(created) });
-  await setSessionCookie(response, session);
+  await setSessionCookie(response, session, request);
   return response;
 }

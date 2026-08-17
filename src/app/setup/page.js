@@ -83,12 +83,12 @@ export default function SetupPage() {
       <main className="auth-screen">
         <div className="auth-card">
           <div className="auth-brand">
-            <span className="brand-crest">
-              <BrandMark />
+            <span className="brand-crest brand-crest-lg">
+              <BrandMark size={72} />
             </span>
             <div>
-              <p className="auth-kicker">Vercel deployment</p>
               <h1>Sign-in credentials</h1>
+              <p className="auth-kicker">BTASP hosted deployment</p>
             </div>
           </div>
           <p className="sub">
@@ -118,12 +118,12 @@ export default function SetupPage() {
     <main className="auth-screen">
       <div className="auth-card">
         <div className="auth-brand">
-          <span className="brand-crest">
-            <BrandMark />
+          <span className="brand-crest brand-crest-lg">
+            <BrandMark size={72} />
           </span>
           <div>
-            <p className="auth-kicker">First-run security</p>
             <h1>Create administrator</h1>
+            <p className="auth-kicker">BTASP first-run security</p>
           </div>
         </div>
         <p className="sub">

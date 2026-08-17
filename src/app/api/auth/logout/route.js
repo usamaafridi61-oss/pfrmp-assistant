@@ -9,6 +9,6 @@ export async function POST(request) {
   if (auth) await revokeSession(auth.session.id);
 
   const response = NextResponse.json({ ok: true });
-  clearSessionCookie(response);
+  clearSessionCookie(response, request);
   return response;
 }

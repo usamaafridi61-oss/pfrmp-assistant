@@ -26,7 +26,7 @@ async function finishLogin(user, request) {
     user: userPayload(user),
     requiresTotp: false,
   });
-  await setSessionCookie(response, session);
+  await setSessionCookie(response, session, request);
   return response;
 }
 

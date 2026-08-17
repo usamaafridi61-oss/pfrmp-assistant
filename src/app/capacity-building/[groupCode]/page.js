@@ -75,6 +75,9 @@ export default function CapacityGroupDetailPage() {
           </p>
         </div>
         <div className="page-header-actions">
+          <Link href="/capacity-building/manual-entry" className="btn-secondary">
+            Manual Entry
+          </Link>
           <Link href="/capacity-building/events" className="btn-secondary">
             Events Register
           </Link>

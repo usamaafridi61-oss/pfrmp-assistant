@@ -1,12 +1,11 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import BrandMark from "@/components/BrandMark";
 import { useAuth } from "@/context/AuthContext";
 
 function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const { refresh } = useAuth();
 
@@ -25,24 +24,45 @@ function LoginForm() {
     event.preventDefault();
     setBusy(true);
     setError("");
+    const trimmedUsername = username.trim();
+    if (!trimmedUsername || !password) {
+      setError("Enter your username and password.");
+      setBusy(false);
+      return;
+    }
+    if (trimmedUsername.includes("@")) {
+      setError("Sign in with your username, not your email address.");
+      setBusy(false);
+      return;
+    }
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
+        credentials: "same-origin",
+        body: JSON.stringify({ username: trimmedUsername, password }),
       });
-      const data = await res.json();
+      let data = {};
+      try {
+        data = await res.json();
+      } catch {
+        setError("Could not sign in. Try again.");
+        return;
+      }
       if (!res.ok) {
-        setError(data.error || "Sign in failed.");
+        setError(data.error || "Invalid username or password.");
         return;
       }
       if (data.requiresTotp) {
         setChallengeId(data.challengeId);
         return;
       }
-      await refresh();
-      router.replace(nextPath);
-      router.refresh();
+      const next = await refresh();
+      if (next.status !== "authenticated") {
+        setError("Signed in, but the session could not be restored. Try again.");
+        return;
+      }
+      window.location.assign(nextPath);
     } catch {
       setError("Could not sign in.");
     } finally {
@@ -58,20 +78,26 @@ function LoginForm() {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
         body: JSON.stringify({
           challengeId,
           totp: useRecovery ? undefined : totp,
           recoveryCode: useRecovery ? recoveryCode : undefined,
         }),
       });
-      const data = await res.json();
+      let data = {};
+      try {
+        data = await res.json();
+      } catch {
+        setError("Could not verify the authenticator code.");
+        return;
+      }
       if (!res.ok) {
         setError(data.error || "Authenticator verification failed.");
         return;
       }
       await refresh();
-      router.replace(nextPath);
-      router.refresh();
+      window.location.assign(nextPath);
     } catch {
       setError("Could not verify the authenticator code.");
     } finally {
@@ -83,12 +109,12 @@ function LoginForm() {
     <main className="auth-screen">
       <div className="auth-card">
         <div className="auth-brand">
-          <span className="brand-crest">
-            <BrandMark />
+          <span className="brand-crest brand-crest-lg">
+            <BrandMark size={72} />
           </span>
           <div>
-            <p className="auth-kicker">BTASP Decision Support</p>
-            <h1>PFRMP Assistant</h1>
+            <h1 className="auth-wordmark">BTASP</h1>
+            <p className="auth-kicker">Billion Tree Afforestation Support Project</p>
           </div>
         </div>
 
@@ -141,20 +167,25 @@ function LoginForm() {
         ) : (
           <>
             <h2>Sign in</h2>
-            <p className="sub">Protected access to monitoring data, imports, and GIS layers.</p>
+            <p className="sub">Use your username and password. Email addresses will not work.</p>
             <form onSubmit={submitCredentials}>
               <label>
                 Username
                 <input
+                  name="username"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   autoComplete="username"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                   required
                 />
               </label>
               <label>
                 Password
                 <input
+                  name="password"
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -171,7 +202,7 @@ function LoginForm() {
         )}
 
         <p className="auth-foot muted small">
-          Sessions expire after inactivity. Sign in with your username and password.
+          Sessions expire after inactivity. Sign in with username and password only.
         </p>
       </div>
     </main>

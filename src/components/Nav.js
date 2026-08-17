@@ -57,6 +57,7 @@ const NAV_MENUS = [
     match: ["/ntfp"],
     items: [
       { href: "/ntfp", label: "NTFP Value Chains", desc: "Honey, walnut, persimmon, pomegranate and medicinal", icon: "hex" },
+      { href: "/ntfp/manual-entry", label: "Manual Data Entry", desc: "Record and review NTFP progress", icon: "edit" },
       { href: "/module-import", label: "Import Action Plan", desc: "Upload NTFP Excel action plans", icon: "upload" },
     ],
   },
@@ -68,6 +69,7 @@ const NAV_MENUS = [
     items: [
       { href: "/capacity-building", label: "Capacity Building", desc: "Nine BTASP groups and 551 planned events", icon: "users" },
       { href: "/capacity-building/events", label: "Events Register", desc: "Workshop and training event records", icon: "users" },
+      { href: "/capacity-building/manual-entry", label: "Manual Data Entry", desc: "Record, edit and review training events", icon: "edit" },
       { href: "/capacity-building/calendar", label: "Training Calendar", desc: "Scheduled capacity-building calendar", icon: "calendar" },
       { href: "/module-import", label: "Import Capacity Plan", desc: "Upload the Global Capacity Building Plan", icon: "upload" },
     ],
@@ -269,7 +271,13 @@ function menuIsActive(pathname, menu) {
   });
 }
 
-const WRITE_HREFS = new Set(["/import", "/module-import", "/manual-entry"]);
+const WRITE_HREFS = new Set([
+  "/import",
+  "/module-import",
+  "/manual-entry",
+  "/ntfp/manual-entry",
+  "/capacity-building/manual-entry",
+]);
 
 function visibleMenus(canWrite) {
   if (canWrite) return NAV_MENUS;
@@ -418,14 +426,13 @@ export default function Nav() {
           <div className="app-nav-brand">
             <Link href="/" className="app-nav-brand-link" onClick={(e) => navigateTo("/", e)}>
               <span className="brand-crest">
-                <BrandMark />
+                <BrandMark size={48} />
               </span>
               <span className="brand-text-stack">
                 <span className="brand-title-row">
-                  <span className="brand-title">PFRMP Assistant</span>
-                  <span className="brand-badge">BTASP DSS</span>
+                  <span className="brand-title">BTASP</span>
                 </span>
-                <span className="brand-sub">Monitoring &amp; Knowledge Base</span>
+                <span className="brand-sub">Billion Tree Afforestation Support Project</span>
               </span>
             </Link>
           </div>

@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useData } from "@/context/DataContext";
+import { useAuth } from "@/context/AuthContext";
 import CapacityModuleCard from "@/components/capacityBuilding/CapacityModuleCard";
 import {
   getCapacityDashboardSummary,
@@ -11,6 +12,7 @@ import {
 
 export default function CapacityBuildingPage() {
   const { data } = useData();
+  const { canWrite } = useAuth();
   const summary = useMemo(() => getCapacityDashboardSummary(data), [data]);
   const groups = useMemo(() => getCapacityGroupSummaries(data), [data]);
   const [filter, setFilter] = useState("all");
@@ -35,8 +37,13 @@ export default function CapacityBuildingPage() {
           </p>
         </div>
         <div className="page-header-actions">
-          <Link href="/capacity-building/events" className="btn-primary">
-            Record Event
+          {canWrite ? (
+            <Link href="/capacity-building/manual-entry" className="btn-primary">
+              Manual Entry
+            </Link>
+          ) : null}
+          <Link href="/capacity-building/events" className="btn-secondary">
+            Events Register
           </Link>
           <Link href="/capacity-building/calendar" className="btn-secondary">
             Calendar

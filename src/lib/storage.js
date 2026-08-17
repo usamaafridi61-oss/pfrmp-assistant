@@ -1,4 +1,5 @@
 import { ensureModuleDefaults } from "@/lib/modules/seed";
+import { fetchJson } from "@/lib/http";
 
 export const DEFAULT_DATA = {
   divisions: [],
@@ -57,10 +58,9 @@ export async function loadData() {
   if (typeof window === "undefined") return DEFAULT_DATA;
 
   try {
-    const res = await fetch("/api/data");
+    const res = await fetchJson("/api/data", {}, 12000);
     if (!res.ok) throw new Error("Failed to fetch data");
-    const data = await res.json();
-    return normalizeData(data);
+    return normalizeData(res.data);
   } catch (e) {
     console.error("loadData error:", e);
     return ensureModuleDefaults({ ...DEFAULT_DATA });
@@ -113,8 +113,13 @@ export function createManualEntry(form, previousEntry = null) {
 export function applyManualEntry(data, entry) {
   const manualEntries = [...data.manualEntries];
   const idx = manualEntries.findIndex((m) => m.id === entry.id);
+  const isNew = idx < 0;
   if (idx >= 0) manualEntries[idx] = entry;
   else manualEntries.push(entry);
+
+  if (!isNew) {
+    return { ...data, manualEntries };
+  }
 
   let targets = [...data.targets];
   let progressUpdates = [...data.progressUpdates];
@@ -163,4 +168,11 @@ export function applyManualEntry(data, entry) {
   }
 
   return { ...data, manualEntries, targets, progressUpdates };
+}
+
+export function deleteManualEntry(data, entryId) {
+  return {
+    ...data,
+    manualEntries: (data.manualEntries || []).filter((entry) => entry.id !== entryId),
+  };
 }

@@ -1,6 +1,7 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { useEffect } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { DataProvider } from "@/context/DataContext";
 import Nav from "@/components/Nav";
@@ -8,7 +9,7 @@ import AppShell from "@/components/AppShell";
 
 const PUBLIC_PATHS = ["/login", "/setup"];
 
-function LoadingScreen({ message = "Loading PFRMP Assistant…" }) {
+function LoadingScreen({ message = "Loading…" }) {
   return (
     <main className="container">
       <div className="app-loading-state">
@@ -21,13 +22,35 @@ function LoadingScreen({ message = "Loading PFRMP Assistant…" }) {
 
 function AuthedFrame({ children }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { status, isPublicPath } = useAuth();
   const publicPage = isPublicPath || PUBLIC_PATHS.includes(pathname);
 
+  useEffect(() => {
+    if (status === "authenticated" && publicPage) {
+      router.replace("/");
+      return;
+    }
+    if (publicPage) return;
+    if (status === "setup") {
+      router.replace("/setup");
+      return;
+    }
+    if (status === "anonymous") {
+      const loginUrl =
+        pathname && pathname !== "/" ? `/login?next=${encodeURIComponent(pathname)}` : "/login";
+      router.replace(loginUrl);
+    }
+  }, [status, publicPage, pathname, router]);
+
   if (publicPage) return children;
 
-  if (status === "loading" || status === "setup" || status === "anonymous") {
-    return <LoadingScreen />;
+  if (status === "loading") {
+    return <LoadingScreen message="Loading…" />;
+  }
+
+  if (status === "setup" || status === "anonymous") {
+    return <LoadingScreen message={status === "anonymous" ? "Opening sign in…" : "Opening setup…"} />;
   }
 
   return (

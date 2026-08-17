@@ -1,18 +1,8 @@
 import { neon } from "@neondatabase/serverless";
-
-const AUTH_KEY = "auth-store";
-const DATA_KEY = "app-data";
+import { AUTH_KEY, DATA_KEY, databaseUrl, hasDatabase } from "@/lib/db-env";
 
 let sql = null;
 let tableReady = false;
-
-export function databaseUrl() {
-  return String(process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.POSTGRES_PRISMA_URL || "").trim();
-}
-
-export function hasDatabase() {
-  return Boolean(databaseUrl());
-}
 
 function normalizedUrl() {
   const raw = databaseUrl();
@@ -58,4 +48,4 @@ export async function kvSet(key, value) {
   `;
 }
 
-export { AUTH_KEY, DATA_KEY };
+export { AUTH_KEY, DATA_KEY, databaseUrl, hasDatabase };

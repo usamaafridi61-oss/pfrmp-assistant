@@ -7,16 +7,28 @@ import {
   SESSION_IDLE_MS,
   SESSION_MAX_AGE_MS,
 } from "@/lib/auth/constants";
-import { randomToken, signValue, verifySignedValue } from "@/lib/auth/crypto";
+import { randomToken } from "@/lib/auth/crypto";
 import { ENV_ADMIN_ID, getEnvAdmin } from "@/lib/auth/envAdmin";
 import { publicUser } from "@/lib/auth/password";
 import { nowIso, pruneExpired, readAuthStore, updateAuthStore } from "@/lib/auth/store";
+import { encodeSessionToken, decodeSessionToken } from "@/lib/auth/token";
 
-function cookieOptions() {
+function isSecureRequest(request) {
+  if (!request) return false;
+  const forwarded = request.headers.get("x-forwarded-proto");
+  if (forwarded) return forwarded.split(",")[0].trim() === "https";
+  try {
+    return new URL(request.url).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function cookieOptions(request) {
   return {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: isSecureRequest(request),
     path: "/",
     maxAge: Math.floor(SESSION_MAX_AGE_MS / 1000),
   };
@@ -39,30 +51,7 @@ function findUser(store, userId) {
   return null;
 }
 
-export async function encodeSessionToken(session) {
-  const payload = Buffer.from(
-    JSON.stringify({
-      sid: session.id,
-      uid: session.userId,
-      exp: new Date(session.expiresAt).getTime(),
-      seen: new Date(session.lastSeenAt).getTime(),
-    }),
-    "utf8"
-  ).toString("base64url");
-  return signValue(payload);
-}
-
-export async function decodeSessionToken(token) {
-  const payload = await verifySignedValue(token);
-  if (!payload) return null;
-  try {
-    const data = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
-    if (data?.sid && data?.uid && data?.exp) return data;
-  } catch {
-    /* legacy cookies stored only the session id */
-  }
-  return { sid: payload, uid: null, exp: null, seen: null, legacy: true };
-}
+export { encodeSessionToken, decodeSessionToken } from "@/lib/auth/token";
 
 export async function getSessionFromRequest(request) {
   const token = request.cookies.get(AUTH_COOKIE)?.value;
@@ -84,10 +73,14 @@ export async function getSessionFromRequest(request) {
   }
 
   if (data.exp <= now) return null;
-  if (now - Number(data.seen || data.exp) > SESSION_IDLE_MS) return null;
 
   const stored = store.sessions.find((s) => s.id === data.sid);
   if (stored?.revokedAt) return null;
+
+  const lastSeenMs = stored
+    ? new Date(stored.lastSeenAt).getTime()
+    : Number(data.seen || data.exp);
+  if (now - lastSeenMs > SESSION_IDLE_MS) return null;
 
   const user = findUser(store, data.uid);
   if (!user || user.disabled) return null;
@@ -173,13 +166,13 @@ export async function revokeUserSessions(userId, exceptId = null) {
   });
 }
 
-export async function setSessionCookie(response, session) {
+export async function setSessionCookie(response, session, request) {
   const token = await encodeSessionToken(session);
-  response.cookies.set(AUTH_COOKIE, token, cookieOptions());
+  response.cookies.set(AUTH_COOKIE, token, cookieOptions(request));
 }
 
-export function clearSessionCookie(response) {
-  response.cookies.set(AUTH_COOKIE, "", { ...cookieOptions(), maxAge: 0 });
+export function clearSessionCookie(response, request) {
+  response.cookies.set(AUTH_COOKIE, "", { ...cookieOptions(request), maxAge: 0 });
 }
 
 export async function createLoginChallenge(userId) {

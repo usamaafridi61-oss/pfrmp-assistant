@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useData } from "@/context/DataContext";
+import { useAuth } from "@/context/AuthContext";
 import ValueChainCard from "@/components/ntfp/ValueChainCard";
 import {
   formatPKRCompact,
@@ -11,6 +12,7 @@ import {
 
 export default function NtfpDashboardPage() {
   const { data } = useData();
+  const { canWrite } = useAuth();
   const summary = useMemo(() => getNtfpDashboardSummary(data), [data]);
   const [filter, setFilter] = useState("all");
 
@@ -49,7 +51,12 @@ export default function NtfpDashboardPage() {
           </p>
         </div>
         <div className="page-header-actions">
-          <Link href="/module-import" className="btn-primary">
+          {canWrite ? (
+            <Link href="/ntfp/manual-entry" className="btn-primary">
+              Manual Entry
+            </Link>
+          ) : null}
+          <Link href="/module-import" className="btn-secondary">
             Import Action Plan
           </Link>
           <Link href="/reports" className="btn-secondary">

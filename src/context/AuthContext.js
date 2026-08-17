@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { fetchJson } from "@/lib/http";
 
 const AuthContext = createContext(null);
 
@@ -10,19 +11,16 @@ const PUBLIC_PATHS = ["/login", "/setup"];
 
 async function loadAuthState() {
   try {
-    const statusRes = await fetch("/api/auth/status", { cache: "no-store" });
-    const statusJson = await statusRes.json();
-    if (statusJson.setupRequired) {
+    const statusRes = await fetchJson("/api/auth/status");
+    if (statusRes.data?.setupRequired) {
       return { status: "setup", user: null };
     }
 
-    const meRes = await fetch("/api/auth/me", { cache: "no-store" });
+    const meRes = await fetchJson("/api/auth/me");
     if (!meRes.ok) {
       return { status: "anonymous", user: null };
     }
-
-    const me = await meRes.json();
-    return { status: "authenticated", user: me.user };
+    return { status: "authenticated", user: meRes.data?.user || null };
   } catch {
     return { status: "anonymous", user: null };
   }
@@ -46,14 +44,20 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     let cancelled = false;
+    const failSafe = setTimeout(() => {
+      if (!cancelled) applyAuth({ status: "anonymous", user: null });
+    }, 12000);
+
     (async () => {
       const next = await loadAuthState();
       if (!cancelled) applyAuth(next);
-    })();
+    })().finally(() => clearTimeout(failSafe));
+
     return () => {
       cancelled = true;
+      clearTimeout(failSafe);
     };
-  }, [applyAuth, pathname]);
+  }, [applyAuth]);
 
   const signOut = useCallback(async () => {
     await fetch("/api/auth/logout", { method: "POST" });

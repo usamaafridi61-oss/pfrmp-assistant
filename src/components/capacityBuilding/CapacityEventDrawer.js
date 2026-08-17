@@ -1,26 +1,18 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getUniqueRegions } from "@/lib/metrics";
 import { statusLabel } from "@/lib/capacityBuilding/metrics";
+import { useAuth } from "@/context/AuthContext";
+import {
+  deleteCapacityEvent,
+  eventToForm,
+  formToCapacityEvent,
+  upsertCapacityEvent,
+} from "@/lib/capacityBuilding/records";
+import AdminEntryActions from "@/components/AdminEntryActions";
 
-const EMPTY_FORM = {
-  status: "completed",
-  eventDateStart: new Date().toISOString().slice(0, 10),
-  eventDateEnd: "",
-  regionId: "",
-  divisionId: "",
-  planningUnitId: "",
-  venue: "",
-  facilitatorNames: "",
-  actualParticipants: "",
-  maleParticipants: "",
-  femaleParticipants: "",
-  attendanceSheetName: "",
-  eventReportName: "",
-  photoNames: "",
-  remarks: "",
-};
+const EMPTY_FORM = eventToForm();
 
 export default function CapacityEventDrawer({
   item,
@@ -28,11 +20,21 @@ export default function CapacityEventDrawer({
   data,
   setData,
   mode = "record",
+  editingEvent = null,
   onClose,
 }) {
-  const [form, setForm] = useState(EMPTY_FORM);
-  const [view, setView] = useState(mode);
+  const { isAdmin, user, canWrite } = useAuth();
+  const createdBy = user?.displayName || user?.username || "User";
+  const [editing, setEditing] = useState(editingEvent);
+  const [form, setForm] = useState(editingEvent ? eventToForm(editingEvent) : EMPTY_FORM);
+  const [view, setView] = useState(editingEvent ? "record" : mode);
   const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    setEditing(editingEvent);
+    setForm(editingEvent ? eventToForm(editingEvent) : eventToForm());
+    setView(editingEvent ? "record" : mode);
+  }, [editingEvent, mode, item?.id]);
 
   const regions = useMemo(() => getUniqueRegions(data.planningUnits || []), [data.planningUnits]);
   const divisions = useMemo(() => {
@@ -49,40 +51,15 @@ export default function CapacityEventDrawer({
 
   function handleSubmit(e) {
     e.preventDefault();
-    const timestamp = new Date().toISOString();
-    const event = {
-      id: crypto.randomUUID(),
+    const event = formToCapacityEvent(form, {
       planItemId: item.id,
-      status: form.status,
-      eventDateStart: form.eventDateStart,
-      eventDateEnd: form.eventDateEnd || undefined,
-      regionId: form.regionId || undefined,
-      divisionId: form.divisionId || undefined,
-      planningUnitId: form.planningUnitId || undefined,
-      venue: form.venue || undefined,
-      facilitatorNames: form.facilitatorNames
-        ? form.facilitatorNames.split(",").map((s) => s.trim()).filter(Boolean)
-        : [],
-      actualParticipants: Number(form.actualParticipants) || 0,
-      maleParticipants: Number(form.maleParticipants) || 0,
-      femaleParticipants: Number(form.femaleParticipants) || 0,
-      attendanceSheetAttachmentId: form.attendanceSheetName || undefined,
-      eventReportAttachmentId: form.eventReportName || undefined,
-      photoAttachmentIds: form.photoNames
-        ? form.photoNames.split(",").map((s) => s.trim()).filter(Boolean)
-        : [],
-      remarks: form.remarks || undefined,
-      createdBy: "User",
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    };
-
-    setData((prev) => ({
-      ...prev,
-      capacityEvents: [...(prev.capacityEvents || []), event],
-    }));
-    setForm({ ...EMPTY_FORM, status: form.status });
-    setMessage("Event saved.");
+      previous: editing,
+      createdBy,
+    });
+    setData((prev) => upsertCapacityEvent(prev, event));
+    setForm(eventToForm({ status: form.status }));
+    setEditing(null);
+    setMessage(editing ? "Event updated." : "Event saved.");
     setView("log");
   }
 
@@ -95,7 +72,9 @@ export default function CapacityEventDrawer({
       <aside className="progress-drawer" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div>
-            <p className="drawer-kicker">{view === "log" ? "Event Log" : "Record Event"}</p>
+            <p className="drawer-kicker">
+              {view === "log" ? "Event Log" : editing ? "Edit Event" : "Record Event"}
+            </p>
             <span className="activity-code-badge">{item.moduleCode}</span>
             <h3>{item.trainingSubject}</h3>
             <p className="small muted">{item.moduleGroupName}</p>
@@ -142,10 +121,28 @@ export default function CapacityEventDrawer({
                       : ""}
                   </p>
                   {event.remarks ? <p className="small">{event.remarks}</p> : null}
+                  <AdminEntryActions
+                    isAdmin={isAdmin}
+                    onEdit={() => {
+                      setEditing(event);
+                      setForm(eventToForm(event));
+                      setView("record");
+                    }}
+                    onDelete={() => {
+                      setData((prev) => deleteCapacityEvent(prev, event.id));
+                      if (editing?.id === event.id) {
+                        setEditing(null);
+                        setForm(eventToForm());
+                      }
+                    }}
+                    deleteLabel="this event"
+                  />
                 </div>
               ))}
             </div>
           )
+        ) : !canWrite ? (
+          <p className="small muted">This account can view the event log but cannot record events.</p>
         ) : (
           <form onSubmit={handleSubmit} className="modal-form">
             <div className="form-grid drawer-form-grid">
@@ -309,8 +306,21 @@ export default function CapacityEventDrawer({
               <button type="button" className="btn-secondary" onClick={onClose}>
                 Cancel
               </button>
+              {editing ? (
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => {
+                    setEditing(null);
+                    setForm(eventToForm());
+                    setView("log");
+                  }}
+                >
+                  Cancel edit
+                </button>
+              ) : null}
               <button type="submit" className="btn-primary">
-                Save Event
+                {editing ? "Update Event" : "Save Event"}
               </button>
             </div>
             {message ? <p className="form-message">{message}</p> : null}
